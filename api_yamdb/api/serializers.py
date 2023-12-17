@@ -1,8 +1,8 @@
 from django.db.models import Avg
 from rest_framework import serializers
 from rest_framework.relations import SlugRelatedField
-
 from reviews.models import Category, Comment, Genre, Review, Title
+
 
 
 class GenreSerializer(serializers.ModelSerializer):
@@ -21,6 +21,7 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ("name", "slug")
         model = Category
         lookup_field = "slug"
+
 
 
 class TitleRetrieveSerializer(serializers.ModelSerializer):
@@ -63,30 +64,42 @@ class TitleWriteSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    """Сериализатор для модели ревью."""
+    def create(self, validated_data):
+        title_id = self.context['view'].kwargs['title_id']
+        user = self.context['request'].user
+        title = Title.objects.get(id=title_id)
 
-    author = SlugRelatedField(slug_field="username", read_only=True)
+        existing_review = Review.objects.filter(title=title, user=user).exists()
+        if existing_review:
+            raise serializers.ValidationError('Вы уже оставляли отзыв')
+
+        validated_data['title'] = title
+        validated_data['user'] = user
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        instance.rating = validated_data.get('rating', instance.rating)
+        instance.comment = validated_data.get('comment', instance.comment)
+        instance.save()
+        return instance
+
+    def validate_id(self, value):
+        title_id = self.context['view'].kwargs['title_id']
+        try:
+            Review.objects.get(id=value, title_id=title_id)
+        except Review.DoesNotExist:
+            raise serializers.ValidationError('Отзыв не найден')
+        return value
+
+    def delete(self, instance):
+        instance.delete()
 
     class Meta:
-        fields = ("id", "text", "author", "score", "pub_date")
         model = Review
-
-    def validate(self, data):
-        """Запрещает пользователям писать второе ревью на произведение."""
-        request = self.context.get("request")
-        title_id = self.context.get("view").kwargs.get("title_id")
-        if (
-            request.method == "POST"
-            and Review.objects.filter(
-                author=request.user, title__id=title_id
-            ).exists()
-        ):
-            raise serializers.ValidationError(
-                "Писать второе ревью вне закона."
-            )
-        return data
-
-
+        fields = ['id', 'title', 'user', 'rating', 'comment', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+        
+        
 class CommentSerializer(serializers.ModelSerializer):
     """Сериализатор для модели комментария."""
 

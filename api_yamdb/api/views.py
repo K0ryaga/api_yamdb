@@ -2,6 +2,7 @@ from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, viewsets
 from rest_framework.viewsets import ModelViewSet
+from rest_framework.permissions import IsAuthenticated
 
 from core.permissions import (
     IsAdminOrReadOnly,
@@ -10,6 +11,7 @@ from core.permissions import (
 from reviews.models import Category, Genre, Review, Title
 from .filters import TitleFilter
 from .mixins import GetListCreateDeleteMixin
+from .permissions import IsReviewOwnerOrModeratorOrAdmin
 from .serializers import (
     CategorySerializer,
     CommentSerializer,
@@ -18,28 +20,6 @@ from .serializers import (
     TitleRetrieveSerializer,
     TitleWriteSerializer,
 )
-
-
-class ReviewViewSet(ModelViewSet):
-    """
-    Получить список всех отзывов.
-    Добавление нового отзыва.
-    Получение отзыва по id.
-    Обновление отзыва по id.
-    """
-
-    serializer_class = ReviewSerializer
-    permission_classes = (IsAuthorModeratorAdminOrReadOnly,)
-    http_method_names = ("get", "post", "delete", "patch")
-
-    def get_title(self):
-        return get_object_or_404(Title, pk=self.kwargs.get("title_id"))
-
-    def get_queryset(self):
-        return self.get_title().reviews.all()
-
-    def perform_create(self, serializer):
-        serializer.save(author=self.request.user, title=self.get_title())
 
 
 class CommentViewSet(ModelViewSet):
@@ -104,3 +84,10 @@ class GenreViewSet(GetListCreateDeleteMixin):
     filter_backends = (filters.SearchFilter,)
     search_fields = ("name",)
     lookup_field = "slug"
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+    permission_classes = [IsAuthenticated, IsReviewOwnerOrModeratorOrAdmin]
+    lookup_field = 'title_id'
