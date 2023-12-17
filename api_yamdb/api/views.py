@@ -1,17 +1,21 @@
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.mail import send_mail
+from django.http import HttpResponse
 from rest_framework import filters, viewsets
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
+import string
+import random
 
 from core.permissions import (
     IsAdminOrReadOnly,
     IsAuthorModeratorAdminOrReadOnly,
 )
-from reviews.models import Category, Genre, Review, Title
+from reviews.models import Category, Genre, Review, Title, User
 from .filters import TitleFilter
 from .mixins import GetListCreateDeleteMixin
-from .permissions import IsReviewOwnerOrModeratorOrAdmin
+from .permissions import IsReviewOwnerOrModeratorOrAdmin, IsAdminUser
 from .serializers import (
     CategorySerializer,
     CommentSerializer,
@@ -19,7 +23,43 @@ from .serializers import (
     ReviewSerializer,
     TitleRetrieveSerializer,
     TitleWriteSerializer,
+    UserSignupSerializer,
 )
+
+
+def code_generator(size=10, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
+
+
+class UserSignupViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSignupSerializer
+    permission_classes = []
+    allowed_methods = ['POST']
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        confirmation_code = code_generator()
+        if serializer.is_valid() is False:
+            User(confirmation_code=confirmation_code).save
+        else:
+            serializer.save(confirmation_code=confirmation_code)
+
+        send_mail(
+            subject='Confirmation code',
+            message=f'Your confirmation code is {confirmation_code}',
+            from_email='from@example.com',
+            recipient_list=[request.data.get('email')],
+            fail_silently=True,
+        )
+        return HttpResponse("На почту был отправлен код подтверждения")
+
+
+class UserSignupByAdminViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSignupSerializer
+    allowed_methods = ['POST']
+    permission_classes = (IsAdminUser,)
 
 
 class CommentViewSet(ModelViewSet):
