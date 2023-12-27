@@ -46,8 +46,7 @@ def sign_up(request):
         confirmation_code,
         'Yamdb',
         [email],
-        fail_silently=False,
-    )
+        fail_silently=False,)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
