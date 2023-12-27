@@ -41,11 +41,13 @@ def sign_up(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     confirmation_code = default_token_generator.make_token(user)
-    send_mail('Token Token Token',
-              confirmation_code,
-              'Yamdb',
-              [email],
-              fail_silently=False,)
+    send_mail(
+        'Token Token Token',
+        confirmation_code,
+        'Yamdb',
+        [email],
+        fail_silently=False,
+    )
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
