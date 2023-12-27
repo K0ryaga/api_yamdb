@@ -1,27 +1,49 @@
 from rest_framework import serializers, exceptions
-from django.contrib.auth.models import User
-from django.core.exceptions import PermissionDenied
-
+from rest_framework.validators import UniqueValidator
+from django.core.validators import RegexValidator
 from .utils import generate_confirmation_code, send_confirmation_email
-from reviews.models import Category, Genre
+from reviews.models import Category, Genre, User
+from reviews.constants import (
+    EMAIL_MAX_LEN, USERNAME_MAX_LEN
+)
 
-
-class RegistrationSerializer(serializers.Serializer):
-    def validate(self, attrs):
-        email = attrs.get('email')
-        username = attrs.get('username')
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError("Этот email уже занят.")
-        if User.objects.filter(username=username).exists():
-            raise serializers.ValidationError("Это имя пользователя уже занято.")
-        confirmation_code = generate_confirmation_code()
-        send_confirmation_email(email, confirmation_code)
-        attrs['confirmation_code'] = confirmation_code
-        return attrs
+class UserEditSerializer(serializers.ModelSerializer):
+    username = serializers.RegexField(
+        max_length=150, regex=r'^[\w.@+-]+\Z', required=True
+    )
+    email = serializers.EmailField(max_length=150, required=True)
 
     class Meta:
         model = User
-        fields = ['email', 'username', 'confirmation_code']
+        fields = (
+            'username',
+            'email',
+            'first_name',
+            'last_name',
+            'bio',
+            'role',
+        )
+        read_only_fields = ('role',)
+
+class TokenSerializer(serializers.Serializer):
+    username = serializers.RegexField(
+        max_length=150, regex=r'^[\w.@+-]+\Z', required=True
+    )
+
+
+class RegistrationSerializer(serializers.Serializer):
+    username = serializers.RegexField(
+        max_length=150, regex=r'^[\w.@+-]+\Z', required=True
+    )
+    email = serializers.EmailField(max_length=150, required=True)
+
+    def validate_username(self, value):
+        if value.lower() == 'me':
+            raise serializers.ValidationError(
+                'Username "me" запрещён к использованию'
+            )
+        return value
+
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -43,84 +65,29 @@ class CategorySerializer(serializers.ModelSerializer):
             'slug': {'validators': []},
         }
 
+
 class UserSerializer(serializers.ModelSerializer):
-    def get_queryset(self):
-        if not self.context['request'].user.is_superuser:
-            raise PermissionDenied("доступ запрещен. Вы не являетесь администратором.")
-
-        return super().get_queryset()
-
-    def create(self, validated_data):
-        if not self.context['request'].user.is_superuser:
-            raise PermissionDenied("Доступ запрещен. Только администратор может создать пользователя.")
-
-        last_name = validated_data.get('last_name')
-        if len(last_name) > 150:
-            raise serializers.ValidationError({"last_name": "Длина поля last_name не должна превышать 150 символов."})
-
-        email = validated_data.get('email')
-        username = validated_data.get('username')
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError({"email": "Этот email уже занят."})
-        if User.objects.filter(username=username).exists():
-            raise serializers.ValidationError({"username": "Это имя пользователя уже занято."})
-
-        user = User.objects.create_user(**validated_data)
-        return user
-
-    def validate_username(self, value):
-        if not self.context['request'].user.is_superuser:
-            raise PermissionDenied("Доступ запрещен. Только администратор может создать пользователя.")
-        return value
-
-    def update_by_admin(self, instance, validated_data):
-        if not self.context['request'].user.is_superuser:
-            raise PermissionDenied("Доступ запрещен. Только администратор может редактировать пользователя.")
-        email = validated_data.get('email')
-        username = validated_data.get('username')
-        if User.objects.filter(email=email).exclude(username=instance.username).exists():
-            raise serializers.ValidationError({"email": "Этот email уже занят."})
-        if User.objects.filter(username=username).exclude(username=instance.username).exists():
-            raise serializers.ValidationError({"username": "Это имя пользователя уже занято."})
-        instance.email = email
-        instance.username = username
-        instance.save()
-        return instance
-
-    def delete(self, instance):
-        if not self.context['request'].user.is_superuser:
-            raise PermissionDenied("Доступ запрещен. Только администратор может удалить пользователя.")
-
-    def retrieve(self, instance):
-        if not self.context['request'].user.is_authenticated:
-            raise serializers.ValidationError("Доступ запрещен. Вы не авторизованы.")
-        return instance
-
-    def update_by_user(self, instance, validated_data):
-        if not self.context['request'].user.is_authenticated:
-            raise serializers.ValidationError("Доступ запрещен. Вы не авторизованы.")
-
-        last_name = validated_data.get('last_name')
-        if len(last_name) > 150:
-            raise serializers.ValidationError({"last_name": "Длина поля last_name не должна превышать 150 символов."})
-
-        email = validated_data.get('email')
-        username = validated_data.get('username')
-        if User.objects.filter(email=email).exclude(username=instance.username).exists():
-            raise serializers.ValidationError({"email": "Этот email уже занят."})
-        if User.objects.filter(username=username).exclude(username=instance.username).exists():
-            raise serializers.ValidationError({"username": "Это имя пользователя уже занято."})
-
-        instance.email = email
-        instance.username = username
-        instance.save()
-
-        return instance
+    username = serializers.CharField(
+        max_length=150,
+        required=True,
+        validators=[
+            UniqueValidator(queryset=User.objects.all()),
+            RegexValidator(regex=r'^[\w.@+-]+\Z'),
+        ]
+    )
+    email = serializers.EmailField(
+        max_length=254,
+        required=True,
+        validators=[
+            UniqueValidator(queryset=User.objects.all())
+        ]
+    )
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'password']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = (
+            'username', 'email', 'first_name', 'last_name', 'bio', 'role',
+        )
 
 
 class GenreSerializer(serializers.ModelSerializer):

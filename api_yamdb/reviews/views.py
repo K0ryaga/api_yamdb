@@ -1,29 +1,115 @@
-from rest_framework import viewsets, permissions
-
-
+from rest_framework import viewsets, permissions, status
+from rest_framework.pagination import LimitOffsetPagination
+from .permissions import IsAdminOrReadOnly
+from api.filters import TitleFilter
+from django.db.models import Avg
+from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
 from .serializers import (
     TitleSerializer,
+    TitleSerializerWrite,
     ReviewSerializer,
     CommentSerializer,)
+from datetime import datetime
+from django.core.validators import MaxValueValidator, MinValueValidator
 from reviews.models import (
                             Title,
                             Review,
                             Comment,)
+from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
+from .permissions import  IsAuthorAdminModerOrReadOnly
+from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 
 
-class TitleViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Title.objects.all()
-    serializer_class = TitleSerializer
-    permission_classes = [permissions.IsAdminUser]
+class TitleViewSet(viewsets.ModelViewSet):
+    """ViewSet модели Title."""
+
+    queryset = Title.objects.annotate(rating=Avg('reviews__score'))
+    permission_classes = (IsAdminOrReadOnly,)
+    pagination_class = LimitOffsetPagination
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = TitleFilter
+
+    def get_serializer_class(self):
+        if self.action in ['list', 'retrieve']:
+            return TitleSerializer
+        return TitleSerializerWrite
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PUT':
+            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        elif request.method == 'PATCH':
+            return super().update(request, *args, **kwargs)
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
-    queryset = Review.objects.all()
     serializer_class = ReviewSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = (IsAuthorAdminModerOrReadOnly,)
+    pagination_class = PageNumberPagination
+
+    def get_title(self):
+        return get_object_or_404(Title, id=self.kwargs.get('title_id'))
+
+    def get_queryset(self):
+        return self.get_title().reviews.all()
+
+    def perform_create(self, serializer):
+        title_id = self.kwargs.get('title_id')
+        title = get_object_or_404(Title, id=title_id)
+        serializer.save(title=title, author=self.request.user)
+
+    @property
+    def allowed_methods(self):
+        methods = super().allowed_methods
+        return [m for m in methods if m != 'PUT']
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PATCH':
+            return super().update(request, *args, **kwargs)
+        else:
+            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all()
+    """Вьюсет для модели Comment"""
+
     serializer_class = CommentSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = (IsAuthorAdminModerOrReadOnly,)
+    pagination_class = PageNumberPagination
+
+    def get_review(self):
+        return get_object_or_404(Review, id=self.kwargs.get('review_id'))
+
+    def get_queryset(self):
+        return self.get_review().comments.all()
+
+    def perform_create(self, serializer):
+        serializer.save(
+            review=self.get_review(), author=self.request.user
+        )
+
+    @property
+    def allowed_methods(self):
+        methods = super().allowed_methods
+        return [m for m in methods if m != 'PUT']
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PATCH':
+            return super().update(request, *args, **kwargs)
+        else:
+            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def destroy(self, request, *args, **kwargs):
+        comment = self.get_object()
+        if comment.author == request.user:
+            comment.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        if request.user.is_moderator:
+            comment.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        if request.user.is_admin:
+            comment.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        raise PermissionDenied()
