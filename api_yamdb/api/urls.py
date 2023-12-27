@@ -8,10 +8,10 @@ from .views import (
     GenreViewSet,
 )
 from reviews.views import (
-                           TitleViewSet,
-                           ReviewViewSet,
-                           CommentViewSet,)
-
+    TitleViewSet,
+    ReviewViewSet,
+    CommentViewSet,
+)
 
 v1_router = routers.DefaultRouter()
 v1_router.register(
@@ -38,7 +38,6 @@ v1_router.register(
     UsersViewSet,
     basename='users'
 )
-
 
 urlpatterns = [
     path('v1/', include(v1_router.urls)),
