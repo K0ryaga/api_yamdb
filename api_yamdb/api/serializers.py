@@ -1,11 +1,9 @@
-from rest_framework import serializers, exceptions
+from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.core.validators import RegexValidator
-from .utils import generate_confirmation_code, send_confirmation_email
+
 from reviews.models import Category, Genre, User
-from reviews.constants import (
-    EMAIL_MAX_LEN, USERNAME_MAX_LEN
-)
+
 
 class UserEditSerializer(serializers.ModelSerializer):
     username = serializers.RegexField(
@@ -24,6 +22,7 @@ class UserEditSerializer(serializers.ModelSerializer):
             'role',
         )
         read_only_fields = ('role',)
+
 
 class TokenSerializer(serializers.Serializer):
     username = serializers.RegexField(
@@ -45,25 +44,17 @@ class RegistrationSerializer(serializers.Serializer):
         return value
 
 
-
 class CategorySerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         if Category.objects.filter(slug=validated_data['slug']).exists():
-            raise serializers.ValidationError('Категория с таким слагом уже существует.')
+            raise serializers.ValidationError(
+                'Категория с таким слагом уже существует.')
         return super().create(validated_data)
-
-    def delete(self, instance):
-        if not self.context['request'].user.is_staff:
-            raise exceptions.PermissionDenied('У вас нет прав для удаления категории.')
-        instance.delete()
-        return None
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug']
-        extra_kwargs = {
-            'slug': {'validators': []},
-        }
+        exclude = ('id',)
+        lookup_field = 'slug'
 
 
 class UserSerializer(serializers.ModelSerializer):

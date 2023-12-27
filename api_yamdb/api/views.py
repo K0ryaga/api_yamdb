@@ -1,14 +1,16 @@
-from rest_framework import status, viewsets, permissions
-from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
+from rest_framework import status, viewsets,  mixins, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import mixins
-from rest_framework import filters
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.views import APIView
 from rest_framework.decorators import action, api_view
-from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.db import IntegrityError
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
+from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
+
 from .serializers import (
     UserEditSerializer,
     TokenSerializer,
@@ -18,13 +20,8 @@ from .serializers import (
     GenreSerializer)
 from reviews.models import Category, User, Genre
 from reviews.permissions import IsAdminOrReadOnly, AdminPermission
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.filters import SearchFilter
-from django.shortcuts import get_object_or_404
-from django.contrib.auth.tokens import default_token_generator
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.db import IntegrityError
+from .pagination import CustomPageNumberPagination
+
 
 class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
                            mixins.ListModelMixin, viewsets.GenericViewSet):
@@ -81,10 +78,11 @@ class CategoryViewSet(GetPostDeleteViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
-    pagination_class = PageNumberPagination
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
+    pagination_class = CustomPageNumberPagination
+    post_data = {'name': 'Книги', 'slug': 'books'}
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -92,7 +90,6 @@ class CategoryViewSet(GetPostDeleteViewSet):
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
-
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -159,4 +156,7 @@ class GenreViewSet(GetPostDeleteViewSet):
             )
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=headers)

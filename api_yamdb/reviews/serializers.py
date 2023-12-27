@@ -1,7 +1,4 @@
-from datetime import datetime
-
 from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied
 
 from .models import (Category,
                      Genre,
@@ -28,6 +25,7 @@ class GenreSerializer(serializers.ModelSerializer):
             'slug',
         )
 
+
 class TitleSerializer(serializers.ModelSerializer):
 
     category = CategorySerializer(many=False, read_only=True)
@@ -37,6 +35,7 @@ class TitleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Title
         fields = '__all__'
+
 
 class TitleSerializerWrite(serializers.ModelSerializer):
     category = serializers.SlugRelatedField(

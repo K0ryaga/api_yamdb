@@ -1,12 +1,12 @@
 from django.core.validators import RegexValidator
 import re
-
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 VALIDATOR_REGEX = RegexValidator(r'^[\w.@+-]+\Z')
 VALIDATOR_ME = RegexValidator(r'[^m][^e]')
+
 
 def validate_year(value):
     now = timezone.now().year
