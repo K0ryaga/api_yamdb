@@ -93,17 +93,9 @@ class UserSerializer(serializers.ModelSerializer):
 class GenreSerializer(serializers.ModelSerializer):
     """Сериализатор для жанра."""
 
-    def create(self, validated_data):
-        genre = Genre.objects.create(**validated_data)
-        self.instance = genre
-        return genre
-
     def destroy(self, instance):
         instance.delete()
 
     class Meta:
         fields = ("name", "slug")
         model = Genre
-        extra_kwargs = {
-            'slug': {'validators': []}
-        }

@@ -146,3 +146,17 @@ class GenreViewSet(GetPostDeleteViewSet):
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
+    pagination_class = PageNumberPagination
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        slug = serializer.validated_data.get('slug')
+        if Genre.objects.filter(slug=slug).exists():
+            return Response(
+                {'detail': 'Slug already exists.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
