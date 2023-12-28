@@ -55,6 +55,7 @@ class IsAuthorAdminModerOrReadOnly(permissions.BasePermission):
             or user.is_admin
             or user.is_moderator
             or obj.author == user
-            or (request.method == 'PATCH' and (obj.author == user or user.is_moderator))
+            or (request.method == 'PATCH' and (
+                obj.author == user or user.is_moderator))
             or (request.method == 'DELETE' and obj.author == user)
         )
