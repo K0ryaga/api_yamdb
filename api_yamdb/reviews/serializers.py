@@ -34,7 +34,13 @@ class TitleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Title
-        fields = '__all__'
+        fields = ('id',
+                  'name',
+                  'year',
+                  'description',
+                  'genre',
+                  'category',
+                  'rating')
 
 
 class TitleSerializerWrite(serializers.ModelSerializer):
@@ -52,7 +58,12 @@ class TitleSerializerWrite(serializers.ModelSerializer):
 
     class Meta:
         model = Title
-        fields = '__all__'
+        fields = ('id',
+                  'name',
+                  'year',
+                  'description',
+                  'genre',
+                  'category')
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -77,7 +88,12 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = '__all__'
+        fields = ('id',
+                  'title',
+                  'text',
+                  'author',
+                  'score',
+                  'pub_date')
         read_only_fields = ('title',)
 
 
@@ -91,5 +107,5 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'author', 'text', 'pub_date']
-        read_only_fields = ['id', 'author', 'pub_date']
+        fields = ('id', 'author', 'text', 'pub_date')
+        read_only_fields = ('id', 'author', 'pub_date')

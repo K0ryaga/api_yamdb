@@ -13,4 +13,4 @@ class TitleFilter(django_filters.FilterSet):
 
     class Meta:
         model = Title
-        fields = ['genre', 'category', 'year', 'name']
+        fields = ('genre', 'category', 'year', 'name')

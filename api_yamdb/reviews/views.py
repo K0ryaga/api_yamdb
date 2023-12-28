@@ -7,7 +7,7 @@ from django.db.models import Avg
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 
-from .permissions import IsAdminOrReadOnly, IsAuthorAdminModerOrReadOnly
+from .permissions import IsAuthorAdminModerOrReadOnly
 from api.filters import TitleFilter
 from .serializers import (
     TitleSerializer,
@@ -22,21 +22,20 @@ class TitleViewSet(viewsets.ModelViewSet):
     """ViewSet модели Title."""
 
     queryset = Title.objects.annotate(rating=Avg('reviews__score'))
-    permission_classes = (IsAdminOrReadOnly,)
+    permission_classes = (IsAuthorAdminModerOrReadOnly,)
     pagination_class = LimitOffsetPagination
     filter_backends = (DjangoFilterBackend,)
     filterset_class = TitleFilter
 
     def get_serializer_class(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ('list', 'retrieve'):
             return TitleSerializer
         return TitleSerializerWrite
 
     def update(self, request, *args, **kwargs):
         if request.method == 'PUT':
             return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-        elif request.method == 'PATCH':
-            return super().update(request, *args, **kwargs)
+        return super().update(request, *args, **kwargs)
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
@@ -63,8 +62,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         if request.method == 'PATCH':
             return super().update(request, *args, **kwargs)
-        else:
-            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -93,18 +91,4 @@ class CommentViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         if request.method == 'PATCH':
             return super().update(request, *args, **kwargs)
-        else:
-            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def destroy(self, request, *args, **kwargs):
-        comment = self.get_object()
-        if comment.author == request.user:
-            comment.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        if request.user.is_moderator:
-            comment.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        if request.user.is_admin:
-            comment.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        raise PermissionDenied()
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)

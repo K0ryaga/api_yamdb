@@ -1,13 +1,17 @@
-from datetime import datetime
+from django.utils import timezone
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.core.exceptions import ValidationError
+
 
 from users.models import User
 
+MAX_TEXT_LENGTH = 15
+
 
 class Category(models.Model):
-    name = models.CharField('Название', max_length=256)
-    slug = models.SlugField(unique=True, max_length=50)
+    name = models.CharField('Название', unique=True, max_length=256)
+    slug = models.SlugField('Слаг', unique=True, max_length=50)
 
     class Meta:
         verbose_name = 'Категория'
@@ -19,8 +23,15 @@ class Category(models.Model):
 
 
 class Genre(models.Model):
-    name = models.CharField('Название', max_length=256)
-    slug = models.SlugField(max_length=50)
+    name = models.CharField('Название', unique=True, max_length=256)
+    slug = models.SlugField('Слаг', unique=True, max_length=50)
+
+    def clean(self):
+        existing_genres = Genre.objects.filter(slug=self.slug)
+        if self.pk:
+            existing_genres = existing_genres.exclude(pk=self.pk)
+        if existing_genres.exists():
+            raise ValidationError('Жанр с таким slug уже существует.')
 
     class Meta:
         verbose_name = 'Жанр'
@@ -35,16 +46,12 @@ class Title(models.Model):
     name = models.CharField(
         max_length=256,
         verbose_name='Название',
-        blank=False,
-        null=False,
     )
     year = models.IntegerField(
         verbose_name='Год выпуска',
-        blank=True,
-        null=True,
         validators=[
             MaxValueValidator(
-                datetime.now().year,
+                timezone.now().year,
                 'Нельзя добавлять произведения, которые еще не вышли.',
             ),
             MinValueValidator(
@@ -87,13 +94,10 @@ class Review(models.Model):
         on_delete=models.CASCADE,
         related_name='reviews',
         verbose_name='Произведение',
-        db_index=True,
-        null=False
+        db_index=True
     )
     text = models.TextField(
         'Текст отзыва',
-        blank=False,
-        null=False,
         help_text='Напишите свой отзыв.',
     )
     author = models.ForeignKey(
@@ -101,16 +105,13 @@ class Review(models.Model):
         on_delete=models.CASCADE,
         related_name='reviews',
         verbose_name='Автор',
-        db_index=True,
-        null=False
+        db_index=True
     )
-    score = models.IntegerField(
+    score = models.PositiveSmallIntegerField(
         verbose_name='Оценка',
-        blank=False,
-        null=False,
         validators=(
-            MinValueValidator(1, 'Минимум 1', ),
-            MaxValueValidator(10, 'Максимум 10', )
+            MinValueValidator(1, 'Минимум 1'),
+            MaxValueValidator(10, 'Максимум 10')
         ),
         help_text='Дайте оценку произведению.',
     )
@@ -132,7 +133,7 @@ class Review(models.Model):
         verbose_name_plural = 'Отзывы'
 
     def __str__(self):
-        return self.text[:15]
+        return self.text[:self.MAX_TEXT_LENGTH]
 
 
 class Comment(models.Model):
@@ -143,21 +144,17 @@ class Comment(models.Model):
         on_delete=models.CASCADE,
         related_name='comments',
         verbose_name='Отзыв',
-        db_index=True,
-        null=False
+        db_index=True
     )
     text = models.TextField(
-        verbose_name='Текст комментария',
-        blank=False,
-        null=False
+        verbose_name='Текст комментария'
     )
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='comments',
         verbose_name='Автор',
-        db_index=True,
-        null=False
+        db_index=True
     )
     pub_date = models.DateTimeField(
         verbose_name='Дата публикации',
@@ -171,4 +168,4 @@ class Comment(models.Model):
         verbose_name_plural = 'Комментарии'
 
     def __str__(self):
-        return self.text[:15]
+        return self.text[:self.MAX_TEXT_LENGTH]

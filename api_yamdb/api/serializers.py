@@ -45,15 +45,10 @@ class RegistrationSerializer(serializers.Serializer):
 
 
 class CategorySerializer(serializers.ModelSerializer):
-    def create(self, validated_data):
-        if Category.objects.filter(slug=validated_data['slug']).exists():
-            raise serializers.ValidationError(
-                'Категория с таким слагом уже существует.')
-        return super().create(validated_data)
 
     class Meta:
         model = Category
-        exclude = ('id',)
+        fields = ('name', 'slug')
         lookup_field = 'slug'
 
 
@@ -83,10 +78,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 class GenreSerializer(serializers.ModelSerializer):
     """Сериализатор для жанра."""
-
-    def destroy(self, instance):
-        instance.delete()
-
     class Meta:
         fields = ("name", "slug")
         model = Genre

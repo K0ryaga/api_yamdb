@@ -19,7 +19,7 @@ from .serializers import (
     UserSerializer,
     GenreSerializer)
 from reviews.models import Category, User, Genre
-from reviews.permissions import IsAdminOrReadOnly, AdminPermission
+from reviews.permissions import IsAuthorAdminModerOrReadOnly, AdminPermission
 from .pagination import CustomPageNumberPagination
 
 
@@ -30,6 +30,7 @@ class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
 
 @api_view(['POST'])
 def sign_up(request):
+    # Если можно обойтись без использования try-except, то лучше обойтись без него, т.к. обработка исключения занимает достаточно много времени.
     serializer = RegistrationSerializer(data=request.data)
     email = request.data.get('email')
     serializer.is_valid(raise_exception=True)
@@ -76,7 +77,7 @@ class TokenApiView(APIView):
 class CategoryViewSet(GetPostDeleteViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthorAdminModerOrReadOnly]
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
@@ -84,6 +85,7 @@ class CategoryViewSet(GetPostDeleteViewSet):
     post_data = {'name': 'Книги', 'slug': 'books'}
 
     def list(self, request, *args, **kwargs):
+        # Можно использовать стандартный функционал DRF для сериализации
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -123,22 +125,25 @@ class UsersViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            User.objects.get_or_create(**serializer.validated_data)
-            return Response(
-                serializer.validated_data, status=status.HTTP_201_CREATED
-            )
-        except IntegrityError:
+
+        if User.objects.filter(**serializer.validated_data).exists():
             return Response(
                 'Попробуй другой email или username',
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        user = User.objects.create(**serializer.validated_data)
+        serialized_user = UserSerializer(user).data
+        return Response(
+            serialized_user,
+            status=status.HTTP_201_CREATED
+        )
+
 
 class GenreViewSet(GetPostDeleteViewSet):
     queryset = Genre.objects.all()
     serializer_class = GenreSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthorAdminModerOrReadOnly]
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
@@ -147,12 +152,6 @@ class GenreViewSet(GetPostDeleteViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        slug = serializer.validated_data.get('slug')
-        if Genre.objects.filter(slug=slug).exists():
-            return Response(
-                {'detail': 'Slug already exists.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         return Response(
