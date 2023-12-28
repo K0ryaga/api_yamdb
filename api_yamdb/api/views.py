@@ -2,10 +2,12 @@ from rest_framework import status, viewsets, mixins, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action, api_view
-from rest_framework.pagination import PageNumberPagination
+from rest_framework.pagination import (PageNumberPagination,
+                                       LimitOffsetPagination)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
+from django.db.models import Avg
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django_filters.rest_framework import DjangoFilterBackend
@@ -17,10 +19,19 @@ from .serializers import (
     RegistrationSerializer,
     CategorySerializer,
     UserSerializer,
-    GenreSerializer)
-from reviews.models import Category, User, Genre
-from reviews.permissions import IsAuthorAdminModerOrReadOnly, AdminPermission
+    GenreSerializer,
+    TitleSerializer,
+    TitleSerializerWrite,
+    ReviewSerializer,
+    CommentSerializer,)
+from reviews.models import (Category,
+                            User,
+                            Genre,
+                            Title,
+                            Review,)
+from .permissions import IsAuthorAdminModerOrReadOnly, AdminPermission
 from .pagination import CustomPageNumberPagination
+from .filters import TitleFilter
 
 
 class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
@@ -158,3 +169,79 @@ class GenreViewSet(GetPostDeleteViewSet):
             serializer.data,
             status=status.HTTP_201_CREATED,
             headers=headers)
+
+
+class TitleViewSet(viewsets.ModelViewSet):
+    """ViewSet модели Title."""
+
+    queryset = Title.objects.annotate(rating=Avg('reviews__score'))
+    permission_classes = (IsAuthorAdminModerOrReadOnly,)
+    pagination_class = LimitOffsetPagination
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = TitleFilter
+
+    def get_serializer_class(self):
+        if self.action in ('list', 'retrieve'):
+            return TitleSerializer
+        return TitleSerializerWrite
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PUT':
+            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        return super().update(request, *args, **kwargs)
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    serializer_class = ReviewSerializer
+    permission_classes = (IsAuthorAdminModerOrReadOnly,)
+    pagination_class = PageNumberPagination
+
+    def get_title(self):
+        return get_object_or_404(Title, id=self.kwargs.get('title_id'))
+
+    def get_queryset(self):
+        return self.get_title().reviews.all()
+
+    def perform_create(self, serializer):
+        title_id = self.kwargs.get('title_id')
+        title = get_object_or_404(Title, id=title_id)
+        serializer.save(title=title, author=self.request.user)
+
+    @property
+    def allowed_methods(self):
+        methods = super().allowed_methods
+        return [m for m in methods if m != 'PUT']
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PATCH':
+            return super().update(request, *args, **kwargs)
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    """Вьюсет для модели Comment"""
+
+    serializer_class = CommentSerializer
+    permission_classes = (IsAuthorAdminModerOrReadOnly,)
+    pagination_class = PageNumberPagination
+
+    def get_review(self):
+        return get_object_or_404(Review, id=self.kwargs.get('review_id'))
+
+    def get_queryset(self):
+        return self.get_review().comments.all()
+
+    def perform_create(self, serializer):
+        serializer.save(
+            review=self.get_review(), author=self.request.user
+        )
+
+    @property
+    def allowed_methods(self):
+        methods = super().allowed_methods
+        return [m for m in methods if m != 'PUT']
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PATCH':
+            return super().update(request, *args, **kwargs)
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)

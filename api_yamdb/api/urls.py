@@ -6,11 +6,9 @@ from .views import (
     CategoryViewSet,
     UsersViewSet,
     GenreViewSet,
-)
-from reviews.views import (
     TitleViewSet,
     ReviewViewSet,
-    CommentViewSet,
+    CommentViewSet
 )
 
 v1_router = routers.DefaultRouter()
