@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, MaxValueValidator
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from reviews.models import (Category,
                             Genre,
@@ -53,8 +55,8 @@ class RegistrationSerializer(serializers.Serializer):
 class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
+        exclude = ('id', )
         model = Category
-        fields = ('name', 'slug')
         lookup_field = 'slug'
 
 
@@ -83,9 +85,8 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class GenreSerializer(serializers.ModelSerializer):
-    """Сериализатор для жанра."""
     class Meta:
-        fields = ("name", "slug")
+        fields = ('name', 'slug')
         model = Genre
 
     class CategorySerializer(serializers.ModelSerializer):
@@ -98,43 +99,46 @@ class GenreSerializer(serializers.ModelSerializer):
 
 
 class TitleSerializer(serializers.ModelSerializer):
-
-    category = CategorySerializer(many=False, read_only=True)
-    genre = GenreSerializer(many=True, read_only=True)
-    rating = serializers.FloatField(read_only=True)
+    rating = serializers.IntegerField(read_only=True)
+    category = CategorySerializer(read_only=True)
+    genre = GenreSerializer(
+        read_only=True,
+        many=True
+    )
+    rating = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Title
-        fields = ('id',
-                  'name',
-                  'year',
-                  'description',
-                  'genre',
-                  'category',
-                  'rating')
+        fields = (
+            'id', 'name', 'year', 'description', 'rating', 'genre', 'category'
+        )
+        read_only_fields = fields
 
 
 class TitleSerializerWrite(serializers.ModelSerializer):
+    year = serializers.IntegerField(
+        required=True,
+        validators=[
+            MaxValueValidator(
+                timezone.now().year,
+                'Нельзя добавлять произведения, которые еще не вышли.'
+            ),
+        ],
+    )
     category = serializers.SlugRelatedField(
-        slug_field='slug',
-        read_only=False,
         queryset=Category.objects.all(),
+        slug_field='slug'
     )
     genre = serializers.SlugRelatedField(
         slug_field='slug',
-        read_only=False,
         queryset=Genre.objects.all(),
-        many=True,
+        many=True
     )
 
     class Meta:
         model = Title
-        fields = ('id',
-                  'name',
-                  'year',
-                  'description',
-                  'genre',
-                  'category')
+        fields = (
+            'id', 'name', 'year', 'description', 'genre', 'category')
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -147,14 +151,17 @@ class ReviewSerializer(serializers.ModelSerializer):
     )
 
     def validate(self, data):
-        if self.context['request'].method == 'POST':
-            if Review.objects.filter(
-                author=self.context['request'].user,
-                title=self.context['view'].kwargs.get('title_id')
-            ).exists():
-                raise serializers.ValidationError(
-                    'Нельзя оставить отзыв на одно произведение дважды'
-                )
+        if self.context['request'].method != 'POST':
+            return data
+        if Review.objects.filter(
+            author=self.context['request'].user,
+            title=get_object_or_404(
+                Title,
+                id=self.context['view'].kwargs.get('title_id'))
+        ).exists():
+            raise serializers.ValidationError(
+                'Вы не можете добавить более'
+                'одного отзыва на произведение')
         return data
 
     class Meta:
@@ -180,4 +187,3 @@ class CommentSerializer(serializers.ModelSerializer):
         model = Comment
         fields = ('id', 'author', 'text', 'pub_date')
         read_only_fields = ('id', 'author', 'pub_date')
-

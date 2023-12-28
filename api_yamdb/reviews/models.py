@@ -79,6 +79,7 @@ class Title(models.Model):
     )
 
     class Meta:
+        ordering = ('name',)
         verbose_name = 'Произведение'
         verbose_name_plural = 'Произведения'
 
@@ -133,7 +134,7 @@ class Review(models.Model):
         verbose_name_plural = 'Отзывы'
 
     def __str__(self):
-        return self.text[:self.MAX_TEXT_LENGTH]
+        return self.text
 
 
 class Comment(models.Model):
@@ -168,4 +169,4 @@ class Comment(models.Model):
         verbose_name_plural = 'Комментарии'
 
     def __str__(self):
-        return self.text[:self.MAX_TEXT_LENGTH]
+        return self.text

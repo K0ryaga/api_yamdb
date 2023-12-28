@@ -1,8 +1,5 @@
-from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from django.utils.translation import gettext_lazy as _
-# для чего используется этот модуль?
 
 
 class User(AbstractUser):
@@ -21,7 +18,7 @@ class User(AbstractUser):
     )
 
     username = models.CharField(
-        _('Логин'),
+        'Логин',
         max_length=150,
         unique=True,
     )
@@ -31,36 +28,34 @@ class User(AbstractUser):
         unique=True,
     )
     first_name = models.CharField(
-        _('Имя'),
+        'Имя',
         max_length=150,
-        unique=False,
         blank=True,
     )
     last_name = models.CharField(
-        _('Фамилия'),
+        'Фамилия',
         max_length=150,
-        unique=False,
         blank=True,
     )
     bio = models.TextField(
-        _('Биография'),
+        'Биография',
         blank=True,
     )
     role = models.CharField(
-        _('Роль пользователя'),
+        'Роль пользователя',
         max_length=150,
         default=USER,
         choices=CHOICES_ROLE,
     )
     confirmation_code = models.CharField(
-        # Для чего в модели User это поле?
+        # Используйется для def sign_up
         max_length=32,
         blank=True,
     )
 
     class Meta:
-        verbose_name = _('Пользователь')
-        verbose_name_plural = _('Пользователи')
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
         ordering = ('id',)
 
     @property

@@ -1,9 +1,8 @@
-from rest_framework import status, viewsets, mixins, filters
+from rest_framework import status, viewsets, mixins, filters, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.decorators import action, api_view
-from rest_framework.pagination import (PageNumberPagination,
-                                       LimitOffsetPagination)
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
@@ -12,6 +11,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
+
 
 from .serializers import (
     UserEditSerializer,
@@ -29,8 +29,9 @@ from reviews.models import (Category,
                             Genre,
                             Title,
                             Review,)
-from .permissions import IsAuthorAdminModerOrReadOnly, AdminPermission
-from .pagination import CustomPageNumberPagination
+from .permissions import (IsAuthorAdminModerOrReadOnly,
+                          AdminPermission,
+                          AdminReadOnly)
 from .filters import TitleFilter
 
 
@@ -41,7 +42,7 @@ class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
 
 @api_view(['POST'])
 def sign_up(request):
-    # Если можно обойтись без использования try-except, то лучше обойтись без него, т.к. обработка исключения занимает достаточно много времени.
+    # Мы не нашли способ реализовать без использования try-except
     serializer = RegistrationSerializer(data=request.data)
     email = request.data.get('email')
     serializer.is_valid(raise_exception=True)
@@ -80,7 +81,7 @@ class TokenApiView(APIView):
             token = RefreshToken.for_user(user)
             return Response(
                 {'token': str(token.access_token)},
-                status=status.HTTP_201_CREATED,
+                status=status.HTTP_200_OK,
             )
         return Response('Error', status=status.HTTP_400_BAD_REQUEST)
 
@@ -88,22 +89,10 @@ class TokenApiView(APIView):
 class CategoryViewSet(GetPostDeleteViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthorAdminModerOrReadOnly]
+    permission_classes = [AdminReadOnly]
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
-    pagination_class = CustomPageNumberPagination
-    post_data = {'name': 'Книги', 'slug': 'books'}
-
-    def list(self, request, *args, **kwargs):
-        # Можно использовать стандартный функционал DRF для сериализации
-        queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
 
 
 class UsersViewSet(viewsets.ModelViewSet):
@@ -137,75 +126,36 @@ class UsersViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        if User.objects.filter(**serializer.validated_data).exists():
+        user = serializer.validated_data.get('username')
+        if User.objects.filter(username=user).exists():
             return Response(
-                'Попробуй другой email или username',
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+                'Пользователь с таким username уже существует',
+                status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create(**serializer.validated_data)
-        serialized_user = UserSerializer(user).data
+        user = User.objects.create_user(**serializer.validated_data)
         return Response(
-            serialized_user,
-            status=status.HTTP_201_CREATED
-        )
-
-
-class GenreViewSet(GetPostDeleteViewSet):
-    queryset = Genre.objects.all()
-    serializer_class = GenreSerializer
-    permission_classes = [IsAuthorAdminModerOrReadOnly]
-    filter_backends = (DjangoFilterBackend, filters.SearchFilter)
-    search_fields = ('name',)
-    lookup_field = 'slug'
-    pagination_class = PageNumberPagination
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(
-            serializer.data,
-            status=status.HTTP_201_CREATED,
-            headers=headers)
-
-
-class TitleViewSet(viewsets.ModelViewSet):
-    """ViewSet модели Title."""
-
-    queryset = Title.objects.annotate(rating=Avg('reviews__score'))
-    permission_classes = (IsAuthorAdminModerOrReadOnly,)
-    pagination_class = LimitOffsetPagination
-    filter_backends = (DjangoFilterBackend,)
-    filterset_class = TitleFilter
-
-    def get_serializer_class(self):
-        if self.action in ('list', 'retrieve'):
-            return TitleSerializer
-        return TitleSerializerWrite
-
-    def update(self, request, *args, **kwargs):
-        if request.method == 'PUT':
-            return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
-        return super().update(request, *args, **kwargs)
+            UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
-    permission_classes = (IsAuthorAdminModerOrReadOnly,)
+    permission_classes = (
+        IsAuthorAdminModerOrReadOnly,
+        permissions.IsAuthenticatedOrReadOnly)
     pagination_class = PageNumberPagination
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_title(self):
-        return get_object_or_404(Title, id=self.kwargs.get('title_id'))
+        return get_object_or_404(Title, pk=self.kwargs.get('title_id'))
+
+    def perform_create(self, serializer):
+        serializer.save(
+            author=self.request.user,
+            title=self.get_title()
+        )
 
     def get_queryset(self):
         return self.get_title().reviews.all()
-
-    def perform_create(self, serializer):
-        title_id = self.kwargs.get('title_id')
-        title = get_object_or_404(Title, id=title_id)
-        serializer.save(title=title, author=self.request.user)
 
     @property
     def allowed_methods(self):
@@ -216,6 +166,32 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if request.method == 'PATCH':
             return super().update(request, *args, **kwargs)
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+
+class GenreViewSet(GetPostDeleteViewSet):
+    queryset = Genre.objects.all()
+    serializer_class = GenreSerializer
+    permission_classes = [AdminReadOnly]
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter)
+    search_fields = ('name',)
+    lookup_field = 'slug'
+    pagination_class = PageNumberPagination
+
+
+class TitleViewSet(viewsets.ModelViewSet):
+
+    http_method_names = ['get', 'post', 'patch', 'delete']
+
+    queryset = Title.objects.annotate(
+        rating=Avg('reviews__score')).order_by('id')
+    permission_classes = (AdminReadOnly,)
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = TitleFilter
+
+    def get_serializer_class(self):
+        if self.action in ('list', 'retrieve'):
+            return TitleSerializer
+        return TitleSerializerWrite
 
 
 class CommentViewSet(viewsets.ModelViewSet):
