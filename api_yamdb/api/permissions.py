@@ -36,11 +36,13 @@ class AdminReadOnly(BasePermission):
 
 
 class AdminPermission(permissions.BasePermission):
+    """Разрешает только администратору"""
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.is_admin
 
 
 class IsAuthorAdminModerOrReadOnly(permissions.BasePermission):
+    """Разрешает только администратору, модератору и автору."""
     def has_permission(self, request, view):
         user = request.user
         return (

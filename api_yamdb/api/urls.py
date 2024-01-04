@@ -13,16 +13,16 @@ from .views import (
 
 v1_router = routers.DefaultRouter()
 v1_router.register(
-    r'categories',
+    'categories',
     CategoryViewSet,
     basename='category'
 )
 v1_router.register(
-    r'genres',
+    'genres',
     GenreViewSet,
     basename='genre'
 )
-v1_router.register(r'titles', TitleViewSet, basename='title')
+v1_router.register('titles', TitleViewSet, basename='title')
 v1_router.register(
     r'titles/(?P<title_id>\d+)/reviews', ReviewViewSet, basename='reviews'
 )
@@ -32,7 +32,7 @@ v1_router.register(
     basename='comment'
 )
 v1_router.register(
-    r'users',
+    'users',
     UsersViewSet,
     basename='users'
 )

@@ -10,7 +10,6 @@ from reviews.models import (Category,
                             Review,
                             Comment,
                             User)
-from api_yamdb.settings import MAX_SCORE, MIN_SCORE
 
 
 class UserEditSerializer(serializers.ModelSerializer):
@@ -145,9 +144,6 @@ class ReviewSerializer(serializers.ModelSerializer):
     author = serializers.SlugRelatedField(
         slug_field='username', read_only=True,
         default=serializers.CurrentUserDefault()
-    )
-    score = serializers.IntegerField(
-        min_value=MIN_SCORE, max_value=MAX_SCORE
     )
 
     def validate(self, data):

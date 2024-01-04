@@ -5,7 +5,6 @@ from django.db import models
 class User(AbstractUser):
     """
     Переопределена модель User
-    Необходимо прописать валидатор
     """
     USER = 'user'
     MODERATOR = 'moderator'
@@ -49,6 +48,8 @@ class User(AbstractUser):
     )
     confirmation_code = models.CharField(
         # Используйется для def sign_up
+        # теперь не используется однако убрать нельзя ибо будут ошибки
+        # нужно думать что с ней делать
         max_length=32,
         blank=True,
     )

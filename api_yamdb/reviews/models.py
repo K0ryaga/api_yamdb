@@ -1,8 +1,6 @@
 from django.utils import timezone
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.core.exceptions import ValidationError
-
 
 from users.models import User
 
@@ -26,13 +24,6 @@ class Genre(models.Model):
     name = models.CharField('Название', unique=True, max_length=256)
     slug = models.SlugField('Слаг', unique=True, max_length=50)
 
-    def clean(self):
-        existing_genres = Genre.objects.filter(slug=self.slug)
-        if self.pk:
-            existing_genres = existing_genres.exclude(pk=self.pk)
-        if existing_genres.exists():
-            raise ValidationError('Жанр с таким slug уже существует.')
-
     class Meta:
         verbose_name = 'Жанр'
         verbose_name_plural = 'Жанры'
@@ -47,7 +38,7 @@ class Title(models.Model):
         max_length=256,
         verbose_name='Название',
     )
-    year = models.IntegerField(
+    year = models.PositiveSmallIntegerField(
         verbose_name='Год выпуска',
         validators=[
             MaxValueValidator(

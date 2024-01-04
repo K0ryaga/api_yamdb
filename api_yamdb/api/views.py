@@ -5,8 +5,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.db import IntegrityError
-from django.db.models import Avg
+from django.db.models import Avg,  Q
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django_filters.rest_framework import DjangoFilterBackend
@@ -42,24 +41,27 @@ class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
 
 @api_view(['POST'])
 def sign_up(request):
-    # Мы не нашли способ реализовать без использования try-except
     serializer = RegistrationSerializer(data=request.data)
     email = request.data.get('email')
     serializer.is_valid(raise_exception=True)
-    try:
-        user, created = User.objects.get_or_create(**serializer.validated_data)
-    except IntegrityError:
-        return Response(
-            'Попробуй другой email или username',
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+
+    username = serializer.validated_data['username']
+    user = User.objects.filter(Q(username=username) | Q(email=email)).first()
+
+    if user is not None:
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    user = User.objects.create(**serializer.validated_data)
     confirmation_code = default_token_generator.make_token(user)
+
     send_mail(
         'Token Token Token',
         confirmation_code,
         'Yamdb',
         [email],
-        fail_silently=False,)
+        fail_silently=False,
+    )
+
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -89,7 +91,7 @@ class TokenApiView(APIView):
 class CategoryViewSet(GetPostDeleteViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [AdminReadOnly]
+    permission_classes = (AdminReadOnly,)
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
@@ -171,7 +173,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
 class GenreViewSet(GetPostDeleteViewSet):
     queryset = Genre.objects.all()
     serializer_class = GenreSerializer
-    permission_classes = [AdminReadOnly]
+    permission_classes = (AdminReadOnly,)
     filter_backends = (DjangoFilterBackend, filters.SearchFilter)
     search_fields = ('name',)
     lookup_field = 'slug'
