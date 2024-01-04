@@ -41,6 +41,7 @@ class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
 
 @api_view(['POST'])
 def sign_up(request):
+    # Получаем из БД объект по username или email, проверяем какие у него поля
     serializer = RegistrationSerializer(data=request.data)
     email = request.data.get('email')
     serializer.is_valid(raise_exception=True)
