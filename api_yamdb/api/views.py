@@ -5,7 +5,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.db.models import Avg,  Q
+from django.db.models import Avg, Q
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django_filters.rest_framework import DjangoFilterBackend
@@ -22,8 +22,7 @@ from .serializers import (
     TitleSerializer,
     TitleSerializerWrite,
     ReviewSerializer,
-    CommentSerializer,
-)
+    CommentSerializer,)
 from reviews.models import (Category,
                             User,
                             Genre,
@@ -31,8 +30,7 @@ from reviews.models import (Category,
                             Review,)
 from .permissions import (IsAuthorAdminModerOrReadOnly,
                           AdminPermission,
-                          AdminReadOnly,
-                          )
+                          AdminReadOnly,)
 from .filters import TitleFilter
 
 
