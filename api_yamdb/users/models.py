@@ -46,13 +46,6 @@ class User(AbstractUser):
         default=USER,
         choices=CHOICES_ROLE,
     )
-    confirmation_code = models.CharField(
-        # Используйется для def sign_up
-        # теперь не используется однако убрать нельзя ибо будут ошибки
-        # нужно думать что с ней делать
-        max_length=32,
-        blank=True,
-    )
 
     class Meta:
         verbose_name = 'Пользователь'

@@ -41,27 +41,41 @@ class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
 
 @api_view(['POST'])
 def sign_up(request):
-    # Получаем из БД объект по username или email, проверяем какие у него поля
     serializer = RegistrationSerializer(data=request.data)
     email = request.data.get('email')
     serializer.is_valid(raise_exception=True)
 
     username = serializer.validated_data['username']
+    email = serializer.validated_data['email']
     user = User.objects.filter(Q(username=username) | Q(email=email)).first()
 
-    if user is not None:
+    if user and user.email != serializer.data['email']:
+        return Response(
+            {'username': 'Такой username уже зарегистрирован'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    elif user and user.username != serializer.data['username']:
+        return Response(
+            {'email': 'Такой email уже зарегистрирован'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    elif user is None:
+        user = User.objects.create_user(**serializer.validated_data)
+        user.is_staff = True
+        user.save()
+        confirmation_code = default_token_generator.make_token(user)
+
+        send_mail(
+            'Token Token Token',
+            confirmation_code,
+            'Yamdb',
+            [email],
+            fail_silently=False,
+        )
+
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-    user = User.objects.create(**serializer.validated_data)
-    confirmation_code = default_token_generator.make_token(user)
-
-    send_mail(
-        'Token Token Token',
-        confirmation_code,
-        'Yamdb',
-        [email],
-        fail_silently=False,
-    )
 
     return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -71,7 +85,13 @@ class TokenApiView(APIView):
         serializer = TokenSerializer(data=request.data)
         if serializer.is_valid():
             username = serializer.initial_data.get('username')
-            user = get_object_or_404(User, username=username)
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                return Response(
+                    status=status.HTTP_404_NOT_FOUND,
+                    data={'username': 'Incorrect code'}
+                )
             confirmation_code = serializer.initial_data.get(
                 'confirmation_code'
             )
@@ -79,14 +99,15 @@ class TokenApiView(APIView):
                 user, confirmation_code
             ):
                 return Response(
-                    'Неправильный код', status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
+                    data={'confirmation_code': 'Incorrect code'}
                 )
             token = RefreshToken.for_user(user)
             return Response(
                 {'token': str(token.access_token)},
                 status=status.HTTP_200_OK,
             )
-        return Response('Error', status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CategoryViewSet(GetPostDeleteViewSet):
@@ -195,6 +216,20 @@ class TitleViewSet(viewsets.ModelViewSet):
         if self.action in ('list', 'retrieve'):
             return TitleSerializer
         return TitleSerializerWrite
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        created_item = Title.objects.get(pk=serializer.data['id'])
+        response_serializer = TitleSerializer(
+            created_item,
+            context=self.get_serializer_context())
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=headers)
 
 
 class CommentViewSet(viewsets.ModelViewSet):

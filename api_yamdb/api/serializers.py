@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
-from django.core.validators import RegexValidator, MaxValueValidator
+from django.core.validators import (RegexValidator,
+                                    MaxValueValidator,
+                                    MinValueValidator)
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
@@ -35,13 +37,14 @@ class TokenSerializer(serializers.Serializer):
     username = serializers.RegexField(
         max_length=150, regex=r'^[\w.@+-]+\Z', required=True
     )
+    confirmation_code = serializers.CharField(required=True)
 
 
 class RegistrationSerializer(serializers.Serializer):
     username = serializers.RegexField(
         max_length=150, regex=r'^[\w.@+-]+\Z', required=True
     )
-    email = serializers.EmailField(max_length=150, required=True)
+    email = serializers.EmailField(max_length=254, required=True)
 
     def validate_username(self, value):
         if value.lower() == 'me':
@@ -101,7 +104,7 @@ class TitleSerializer(serializers.ModelSerializer):
     rating = serializers.IntegerField(read_only=True)
     category = CategorySerializer(read_only=True)
     genre = GenreSerializer(
-        read_only=True,
+        required=True,
         many=True
     )
     rating = serializers.IntegerField(read_only=True)
@@ -118,6 +121,10 @@ class TitleSerializerWrite(serializers.ModelSerializer):
     year = serializers.IntegerField(
         required=True,
         validators=[
+            MinValueValidator(
+                0,
+                'Нельзя добавлять произведения с годом меньше 0.'
+            ),
             MaxValueValidator(
                 timezone.now().year,
                 'Нельзя добавлять произведения, которые еще не вышли.'
