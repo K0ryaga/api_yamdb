@@ -22,7 +22,8 @@ from .serializers import (
     TitleSerializer,
     TitleSerializerWrite,
     ReviewSerializer,
-    CommentSerializer,)
+    CommentSerializer,
+)
 from reviews.models import (Category,
                             User,
                             Genre,
@@ -30,7 +31,8 @@ from reviews.models import (Category,
                             Review,)
 from .permissions import (IsAuthorAdminModerOrReadOnly,
                           AdminPermission,
-                          AdminReadOnly,)
+                          AdminReadOnly,
+                          )
 from .filters import TitleFilter
 
 
