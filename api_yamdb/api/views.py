@@ -30,7 +30,7 @@ from reviews.models import (Category,
                             Review,)
 from .permissions import (IsAuthorAdminModerOrReadOnly,
                           AdminPermission,
-                          AdminReadOnly)
+                          AdminReadOnly,)
 from .filters import TitleFilter
 
 
