@@ -5,7 +5,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.db.models import Avg, Q
+from django.db.models import Avg
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django_filters.rest_framework import DjangoFilterBackend
@@ -42,29 +42,27 @@ class GetPostDeleteViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin,
 @api_view(['POST'])
 def sign_up(request):
     serializer = RegistrationSerializer(data=request.data)
-    email = request.data.get('email')
     serializer.is_valid(raise_exception=True)
 
     username = serializer.validated_data['username']
     email = serializer.validated_data['email']
-    user = User.objects.filter(Q(username=username) | Q(email=email)).first()
+    user = (
+        User.objects.filter(username=username).first()
+        or User.objects.filter(email=email).first())
 
-    if user and user.email != serializer.data['email']:
-        return Response(
-            {'username': 'Такой username уже зарегистрирован'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    elif user and user.username != serializer.data['username']:
-        return Response(
-            {'email': 'Такой email уже зарегистрирован'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    elif user is None:
+    if user:
+        if user.email != serializer.data['email']:
+            return Response(
+                {'username': 'Такой username уже зарегистрирован'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        elif user.username != serializer.data['username']:
+            return Response(
+                {'email': 'Такой email уже зарегистрирован'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    else:
         user = User.objects.create_user(**serializer.validated_data)
-        user.is_staff = True
-        user.save()
         confirmation_code = default_token_generator.make_token(user)
 
         send_mail(
@@ -75,8 +73,7 @@ def sign_up(request):
             fail_silently=False,
         )
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
+    user.save()
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -90,7 +87,7 @@ class TokenApiView(APIView):
             except User.DoesNotExist:
                 return Response(
                     status=status.HTTP_404_NOT_FOUND,
-                    data={'username': 'Incorrect code'}
+                    data={'confirmation_code': 'Incorrect code'}
                 )
             confirmation_code = serializer.initial_data.get(
                 'confirmation_code'
@@ -203,9 +200,7 @@ class GenreViewSet(GetPostDeleteViewSet):
 
 
 class TitleViewSet(viewsets.ModelViewSet):
-
     http_method_names = ['get', 'post', 'patch', 'delete']
-
     queryset = Title.objects.annotate(
         rating=Avg('reviews__score')).order_by('id')
     permission_classes = (AdminReadOnly,)
@@ -220,16 +215,26 @@ class TitleViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        # Проверка наличия выбранного жанра
+        if 'genre' not in serializer.validated_data:
+            return Response(
+                {'error': 'Необходимо выбрать хотя бы один жанр'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         created_item = Title.objects.get(pk=serializer.data['id'])
         response_serializer = TitleSerializer(
             created_item,
-            context=self.get_serializer_context())
+            context=self.get_serializer_context()
+        )
         return Response(
             response_serializer.data,
             status=status.HTTP_201_CREATED,
-            headers=headers)
+            headers=headers
+        )
 
 
 class CommentViewSet(viewsets.ModelViewSet):
